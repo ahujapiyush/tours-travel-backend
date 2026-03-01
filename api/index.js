@@ -1,19 +1,8 @@
 /**
- * Debug: wrap server import to capture startup crash message.
+ * Vercel serverless entry point.
+ * All requests are forwarded here via vercel.json rewrites.
  */
 require('dotenv').config();
+const app = require('../src/server');
+module.exports = app;
 
-let handler;
-try {
-  const app = require('../src/server');
-  handler = app;
-} catch (e) {
-  console.error('STARTUP CRASH:', e.message, '\n', e.stack);
-  handler = (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.statusCode = 500;
-    res.end(JSON.stringify({ startup_error: e.message, stack: e.stack.split('\n').slice(0, 8) }));
-  };
-}
-
-module.exports = handler;
