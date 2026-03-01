@@ -117,6 +117,125 @@ exports.createBooking = async (req, res, next) => {
   }
 };
 
+// POST /api/bookings/guest — no auth required, phone-number identified customer
+exports.createGuestBooking = async (req, res, next) => {
+  try {
+    const {
+      phone, name,
+      car_id, pickup_address, drop_address,
+      pickup_date, pickup_time, return_date,
+      estimated_distance, notes, coupon_code, total_amount,
+    } = req.body;
+
+    if (!phone || !car_id || !pickup_address || !drop_address || !pickup_date || !pickup_time) {
+      return res.status(400).json({ error: 'phone, car, pickup/drop address, date and time are required' });
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ error: 'Please provide a valid 10-digit phone number' });
+    }
+
+    const car = await db('cars').where({ id: car_id, status: 'available', is_active: true }).first();
+    if (!car) return res.status(400).json({ error: 'Car is not available for booking' });
+
+    // Find or create guest customer by phone
+    let customer = await db('users').where({ phone: cleanPhone, role: 'customer' }).first();
+    if (!customer) {
+      const guestName = name?.trim() || `Guest ${cleanPhone.slice(-4)}`;
+      const guestEmail = `guest_${cleanPhone}@guest.tourstravel.app`;
+      const [newUser] = await db('users')
+        .insert({
+          name: guestName,
+          email: guestEmail,
+          phone: cleanPhone,
+          password_hash: uuidv4(), // random unusable password
+          role: 'customer',
+          is_active: true,
+        })
+        .returning('*');
+      customer = newUser;
+    } else if (name?.trim() && (!customer.name || customer.name.startsWith('Guest '))) {
+      await db('users').where({ id: customer.id }).update({ name: name.trim() });
+      customer.name = name.trim();
+    }
+
+    // Pricing
+    const distance_km = parseFloat(estimated_distance) || 0;
+    const base_fare = parseFloat(car.base_price) || 0;
+    const distance_fare = distance_km * (parseFloat(car.price_per_km) || 0);
+    const tax = (base_fare + distance_fare) * 0.05;
+    let discount = 0;
+
+    if (coupon_code) {
+      const coupon = await db('coupons')
+        .where({ code: coupon_code.toUpperCase(), is_active: true })
+        .where('valid_from', '<=', db.fn.now())
+        .where('valid_until', '>=', db.fn.now())
+        .first();
+      if (coupon && (coupon.usage_limit === null || coupon.used_count < coupon.usage_limit)) {
+        const subtotal = base_fare + distance_fare;
+        if (subtotal >= (coupon.min_order_value || 0)) {
+          if (coupon.discount_type === 'percentage') {
+            discount = Math.min(subtotal * (coupon.discount_value / 100), coupon.max_discount || Infinity);
+          } else {
+            discount = coupon.discount_value;
+          }
+          await db('coupons').where({ id: coupon.id }).increment('used_count', 1);
+        }
+      }
+    }
+
+    const computed_total = Math.max(0, base_fare + distance_fare + tax - discount);
+    const booking_number = generateBookingNumber();
+    const pickupDatetime = pickup_date && pickup_time ? `${pickup_date}T${pickup_time}:00` : pickup_date;
+
+    const [booking] = await db('bookings')
+      .insert({
+        booking_number,
+        customer_id: customer.id,
+        car_id,
+        pickup_address,
+        drop_address,
+        pickup_time: pickupDatetime,
+        return_date: return_date || null,
+        distance_km: distance_km || null,
+        base_fare,
+        distance_fare,
+        time_fare: 0,
+        tax,
+        discount,
+        total_amount: total_amount || computed_total,
+        payment_method: 'cash',
+        notes: notes || null,
+        status: 'pending',
+      })
+      .returning('*');
+
+    await db('cars').where({ id: car_id }).update({ status: 'booked' });
+
+    const admins = await db('users').where({ role: 'admin', is_active: true }).select('id');
+    if (admins.length) {
+      await db('notifications').insert(
+        admins.map((a) => ({
+          user_id: a.id,
+          title: 'New Guest Booking',
+          body: `Guest booking #${booking_number} from ${customer.name} (${cleanPhone})`,
+          type: 'booking',
+          data: JSON.stringify({ booking_id: booking.id, booking_number }),
+        }))
+      );
+    }
+
+    const io = req.app.get('io');
+    if (io) io.to('admins').emit('new_booking', { booking, customer_name: customer.name });
+
+    res.status(201).json({ booking, customer: { id: customer.id, name: customer.name, phone: cleanPhone } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /api/bookings (Customer: own bookings | Admin: all bookings)
 exports.getBookings = async (req, res, next) => {
   try {

@@ -1,8 +1,20 @@
 const router = require('express').Router();
+const multer = require('multer');
 const { body } = require('express-validator');
 const { validate } = require('../middleware/validate');
 const { authenticate, authorize } = require('../middleware/auth');
 const carController = require('../controllers/carController');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed'));
+    }
+    cb(null, true);
+  },
+});
 
 // Public routes
 router.get('/categories', carController.getCategories);
@@ -10,6 +22,9 @@ router.get('/', carController.getCars);
 router.get('/:id', carController.getCarById);
 
 // Admin routes
+router.post('/upload-image', authenticate, authorize('admin'), upload.single('image'), carController.uploadCarImage);
+router.post('/:id/images', authenticate, authorize('admin'), upload.single('image'), carController.addCarImage);
+
 router.post(
   '/',
   authenticate,

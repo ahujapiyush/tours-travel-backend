@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#ecfdf5"/>
+  <rect x="90" y="155" width="470" height="120" rx="20" fill="#10b981"/>
+  <rect x="140" y="120" width="320" height="70" rx="12" fill="#6ee7b7"/>
+  <circle cx="220" cy="282" r="36" fill="#111827"/>
+  <circle cx="450" cy="282" r="36" fill="#111827"/>
+  <circle cx="220" cy="282" r="16" fill="#86efac"/>
+  <circle cx="450" cy="282" r="16" fill="#86efac"/>
+  <text x="320" y="330" text-anchor="middle" font-family="Arial" font-size="26" fill="#14532d">Minivan</text>
+</svg>

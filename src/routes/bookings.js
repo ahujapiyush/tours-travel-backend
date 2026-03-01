@@ -4,6 +4,21 @@ const { validate } = require('../middleware/validate');
 const { authenticate, authorize } = require('../middleware/auth');
 const bookingController = require('../controllers/bookingController');
 
+// Public — guest booking (no auth required)
+router.post(
+  '/guest',
+  [
+    body('phone').trim().notEmpty().withMessage('Phone number is required'),
+    body('car_id').isInt().withMessage('Car ID is required'),
+    body('pickup_address').trim().notEmpty().withMessage('Pickup address is required'),
+    body('drop_address').trim().notEmpty().withMessage('Drop address is required'),
+    body('pickup_date').notEmpty().withMessage('Pickup date is required'),
+    body('pickup_time').notEmpty().withMessage('Pickup time is required'),
+  ],
+  validate,
+  bookingController.createGuestBooking
+);
+
 router.use(authenticate);
 
 router.post(

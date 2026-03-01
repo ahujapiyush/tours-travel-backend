@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#dbeafe"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <rect x="120" y="180" width="400" height="90" rx="26" fill="#2563eb"/>
+  <rect x="190" y="140" width="220" height="70" rx="20" fill="#60a5fa"/>
+  <circle cx="210" cy="276" r="34" fill="#111827"/>
+  <circle cx="430" cy="276" r="34" fill="#111827"/>
+  <circle cx="210" cy="276" r="16" fill="#9ca3af"/>
+  <circle cx="430" cy="276" r="16" fill="#9ca3af"/>
+  <text x="320" y="330" text-anchor="middle" font-family="Arial" font-size="26" fill="#1f2937">Sedan</text>
+</svg>

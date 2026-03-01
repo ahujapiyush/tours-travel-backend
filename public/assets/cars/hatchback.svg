@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#ecfeff"/>
+  <rect x="130" y="175" width="370" height="95" rx="24" fill="#06b6d4"/>
+  <path d="M190 175h170c26 0 40 20 40 42H170c0-25 10-42 20-42z" fill="#67e8f9"/>
+  <circle cx="220" cy="276" r="34" fill="#111827"/>
+  <circle cx="410" cy="276" r="34" fill="#111827"/>
+  <circle cx="220" cy="276" r="15" fill="#94a3b8"/>
+  <circle cx="410" cy="276" r="15" fill="#94a3b8"/>
+  <text x="320" y="330" text-anchor="middle" font-family="Arial" font-size="26" fill="#0f172a">Hatchback</text>
+</svg>

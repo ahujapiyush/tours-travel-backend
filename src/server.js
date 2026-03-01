@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const db = require('./config/database');
 
 const config = require('./config');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -25,7 +26,9 @@ const pollRoutes = require('./routes/poll');
 const app = express();
 
 // ── Middleware ──
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 app.use(cors());
 app.use(compression());
 app.use(morgan('dev'));
@@ -42,6 +45,43 @@ app.use('/api/', limiter);
 
 // Static files (uploads)
 app.use('/uploads', express.static(path.join(__dirname, '..', config.uploads.dir)));
+app.use('/assets', express.static(path.join(__dirname, '..', 'public', 'assets')));
+
+app.get('/assets/car/:carId/:imageId', async (req, res, next) => {
+  try {
+    const carId = parseInt(req.params.carId, 10);
+    const imageId = parseInt(req.params.imageId, 10);
+    if (!carId || !imageId) {
+      return res.status(400).json({ error: 'Invalid asset path' });
+    }
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS car_images (
+        id SERIAL PRIMARY KEY,
+        car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+        image_data BYTEA NOT NULL,
+        mime_type VARCHAR(100) NOT NULL DEFAULT 'image/jpeg',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    const image = await db('car_images')
+      .select('image_data', 'mime_type')
+      .where({ id: imageId, car_id: carId })
+      .first();
+
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    res.setHeader('Content-Type', image.mime_type || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(image.image_data);
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ── API Routes ──
 app.use('/api/auth', authRoutes);

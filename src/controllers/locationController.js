@@ -1,11 +1,54 @@
 const db = require('../config/database');
 const config = require('../config');
+const { INDIA_LOCATIONS } = require('../data/indiaLocations');
 
 const GOOGLE_API_KEY = config.google?.mapsApiKey || process.env.GOOGLE_MAPS_API_KEY || '';
+
+const ensureIndiaLocationsSeeded = async () => {
+  const [stateCountRow, cityCountRow] = await Promise.all([
+    db('states').count('id as count').first(),
+    db('cities').count('id as count').first(),
+  ]);
+
+  const stateCount = parseInt(stateCountRow?.count || 0, 10);
+  const cityCount = parseInt(cityCountRow?.count || 0, 10);
+
+  if (stateCount >= INDIA_LOCATIONS.length && cityCount >= 120) {
+    return;
+  }
+
+  await db.transaction(async (trx) => {
+    await trx('states')
+      .insert(INDIA_LOCATIONS.map((state) => ({ name: state.name, code: state.code, is_active: true })))
+      .onConflict('code')
+      .ignore();
+
+    const states = await trx('states').select('id', 'code');
+    const stateIdByCode = states.reduce((acc, state) => {
+      acc[state.code] = state.id;
+      return acc;
+    }, {});
+
+    const cityRows = INDIA_LOCATIONS.flatMap((state) => {
+      const stateId = stateIdByCode[state.code];
+      if (!stateId) return [];
+      return state.cities.map((cityName) => ({
+        name: cityName,
+        state_id: stateId,
+        is_active: true,
+      }));
+    });
+
+    if (cityRows.length > 0) {
+      await trx('cities').insert(cityRows).onConflict(['name', 'state_id']).ignore();
+    }
+  });
+};
 
 // GET /api/locations/states
 exports.getStates = async (req, res, next) => {
   try {
+    await ensureIndiaLocationsSeeded();
     const states = await db('states').where({ is_active: true }).orderBy('name');
     res.json({ states });
   } catch (error) {
@@ -16,6 +59,7 @@ exports.getStates = async (req, res, next) => {
 // GET /api/locations/cities?state_id=
 exports.getCities = async (req, res, next) => {
   try {
+    await ensureIndiaLocationsSeeded();
     let query = db('cities')
       .select('cities.*', 'states.name as state_name')
       .leftJoin('states', 'cities.state_id', 'states.id')

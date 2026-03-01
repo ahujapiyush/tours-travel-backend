@@ -14,9 +14,6 @@ module.exports = {
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
   },
-  expo: {
-    accessToken: process.env.EXPO_ACCESS_TOKEN || '',
-  },
   uploads: {
     dir: process.env.UPLOAD_DIR || 'uploads',
     maxSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 5242880,

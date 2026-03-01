@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#fff7ed"/>
+  <rect x="70" y="150" width="500" height="125" rx="18" fill="#f97316"/>
+  <rect x="130" y="110" width="330" height="80" rx="10" fill="#fdba74"/>
+  <circle cx="210" cy="285" r="36" fill="#111827"/>
+  <circle cx="460" cy="285" r="36" fill="#111827"/>
+  <circle cx="210" cy="285" r="16" fill="#fed7aa"/>
+  <circle cx="460" cy="285" r="16" fill="#fed7aa"/>
+  <text x="320" y="330" text-anchor="middle" font-family="Arial" font-size="24" fill="#7c2d12">Tempo Traveller</text>
+</svg>

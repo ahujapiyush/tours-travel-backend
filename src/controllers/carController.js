@@ -1,4 +1,116 @@
 const db = require('../config/database');
+const ALLOWED_CAR_STATUSES = ['available', 'booked', 'maintenance', 'inactive'];
+
+let carImagesTableEnsured = false;
+
+const ensureCarImagesTable = async () => {
+  if (carImagesTableEnsured) return;
+  await db.raw(`
+    CREATE TABLE IF NOT EXISTS car_images (
+      id SERIAL PRIMARY KEY,
+      car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,
+      image_data BYTEA NOT NULL,
+      mime_type VARCHAR(100) NOT NULL DEFAULT 'image/jpeg',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  carImagesTableEnsured = true;
+};
+
+const buildImageUrl = (req, carId, imageId) => {
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim() || 'https';
+  return `${proto}://${req.get('host')}/assets/car/${carId}/${imageId}`;
+};
+
+const enrichCarsWithUploadedImages = async (req, cars) => {
+  if (!cars?.length) return;
+  await ensureCarImagesTable();
+  const ids = cars.map((car) => car.id);
+  const imageRows = await db('car_images').select('id', 'car_id').whereIn('car_id', ids).orderBy('id', 'asc');
+  const imageMap = imageRows.reduce((acc, row) => {
+    acc[row.car_id] = acc[row.car_id] || [];
+    acc[row.car_id].push(buildImageUrl(req, row.car_id, row.id));
+    return acc;
+  }, {});
+
+  cars.forEach((car) => {
+    const existing = Array.isArray(car.images) ? car.images : [];
+    const uploaded = imageMap[car.id] || [];
+    car.images = [...uploaded, ...existing
+      .filter((url) => typeof url === 'string' && !uploaded.includes(url))
+      .map((url) => url.replace(/^http:\/\//i, 'https://'))];
+    if (!car.image_url && car.images[0]) {
+      car.image_url = car.images[0];
+    } else if (car.image_url) {
+      car.image_url = car.image_url.replace(/^http:\/\//i, 'https://');
+    }
+  });
+};
+
+// POST /api/cars/upload-image (Admin)
+exports.uploadCarImage = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Image file is required' });
+    }
+
+    const mimeType = req.file.mimetype || 'image/jpeg';
+    const imageDataUrl = `data:${mimeType};base64,${req.file.buffer.toString('base64')}`;
+    res.status(201).json({ image_data_url: imageDataUrl });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/cars/:id/images (Admin)
+exports.addCarImage = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Image file is required' });
+    }
+
+    const carId = parseInt(req.params.id, 10);
+    if (!carId) {
+      return res.status(400).json({ error: 'Valid car id is required' });
+    }
+
+    const car = await db('cars').where({ id: carId }).first();
+    if (!car) {
+      return res.status(404).json({ error: 'Car not found' });
+    }
+
+    await ensureCarImagesTable();
+    const [row] = await db('car_images')
+      .insert({
+        car_id: carId,
+        image_data: req.file.buffer,
+        mime_type: req.file.mimetype || 'image/jpeg',
+      })
+      .returning(['id', 'car_id']);
+
+    const imageUrl = buildImageUrl(req, row.car_id, row.id);
+
+    const existingImages = (() => {
+      try {
+        return JSON.parse(car.images || '[]');
+      } catch {
+        return [];
+      }
+    })();
+
+    const updatedImages = [imageUrl, ...existingImages.filter((url) => typeof url === 'string' && url !== imageUrl)];
+    await db('cars').where({ id: carId }).update({
+      images: JSON.stringify(updatedImages),
+      image_url: car.image_url || imageUrl,
+      updated_at: db.fn.now(),
+    });
+
+    res.status(201).json({ image_url: imageUrl, image_id: row.id });
+  } catch (error) {
+    next(error);
+  }
+};
 
 // GET /api/cars?city_id=&state_id=&category_id=&status=&page=&limit=
 exports.getCars = async (req, res, next) => {
@@ -45,6 +157,8 @@ exports.getCars = async (req, res, next) => {
       try { car.images = JSON.parse(car.images); } catch { car.images = []; }
     });
 
+    await enrichCarsWithUploadedImages(req, cars);
+
     res.json({
       cars,
       pagination: {
@@ -80,6 +194,8 @@ exports.getCarById = async (req, res, next) => {
     try { car.features = JSON.parse(car.features); } catch { car.features = []; }
     try { car.images = JSON.parse(car.images); } catch { car.images = []; }
 
+    await enrichCarsWithUploadedImages(req, [car]);
+
     // Get reviews for this car
     const reviews = await db('reviews')
       .select('reviews.*', 'users.name as customer_name')
@@ -108,6 +224,10 @@ exports.createCar = async (req, res, next) => {
       return res.status(409).json({ error: 'Car with this registration number already exists' });
     }
 
+    if (req.body.status && !ALLOWED_CAR_STATUSES.includes(req.body.status)) {
+      return res.status(400).json({ error: `Invalid status. Allowed: ${ALLOWED_CAR_STATUSES.join(', ')}` });
+    }
+
     const [car] = await db('cars')
       .insert({
         name, brand, model, year, color, registration_number, seats,
@@ -129,8 +249,32 @@ exports.createCar = async (req, res, next) => {
 exports.updateCar = async (req, res, next) => {
   try {
     const updates = { ...req.body, updated_at: db.fn.now() };
+    if (updates.status && !ALLOWED_CAR_STATUSES.includes(updates.status)) {
+      return res.status(400).json({ error: `Invalid status. Allowed: ${ALLOWED_CAR_STATUSES.join(', ')}` });
+    }
     if (updates.features) updates.features = JSON.stringify(updates.features);
-    if (updates.images) updates.images = JSON.stringify(updates.images);
+    if (updates.images) {
+      const cleanedImages = Array.isArray(updates.images)
+        ? updates.images.filter((url) => typeof url === 'string' && !url.startsWith('data:image/'))
+        : [];
+      updates.images = JSON.stringify(cleanedImages.map((url) => url.replace(/^http:\/\//i, 'https://')));
+    }
+    if (updates.image_url && typeof updates.image_url === 'string') {
+      updates.image_url = updates.image_url.replace(/^http:\/\//i, 'https://');
+    }
+
+    ['year', 'seats', 'state_id', 'city_id', 'category_id'].forEach((field) => {
+      if (updates[field] !== undefined && updates[field] !== null) {
+        const parsed = parseInt(updates[field], 10);
+        updates[field] = Number.isFinite(parsed) ? parsed : null;
+      }
+    });
+    ['price_per_km', 'base_price', 'price_per_hour', 'mileage'].forEach((field) => {
+      if (updates[field] !== undefined && updates[field] !== null && updates[field] !== '') {
+        const parsed = parseFloat(updates[field]);
+        updates[field] = Number.isFinite(parsed) ? parsed : null;
+      }
+    });
 
     const [car] = await db('cars')
       .where({ id: req.params.id })

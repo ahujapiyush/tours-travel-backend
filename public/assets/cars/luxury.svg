@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#f5f3ff"/>
+  <rect x="100" y="175" width="440" height="95" rx="22" fill="#7c3aed"/>
+  <rect x="190" y="130" width="250" height="70" rx="14" fill="#a78bfa"/>
+  <circle cx="210" cy="278" r="35" fill="#111827"/>
+  <circle cx="430" cy="278" r="35" fill="#111827"/>
+  <circle cx="210" cy="278" r="16" fill="#c4b5fd"/>
+  <circle cx="430" cy="278" r="16" fill="#c4b5fd"/>
+  <text x="320" y="330" text-anchor="middle" font-family="Arial" font-size="26" fill="#312e81">Luxury</text>
+</svg>
