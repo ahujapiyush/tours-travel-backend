@@ -1,8 +1,7 @@
 /**
- * Vercel serverless function entry point.
- * Imports the Express app and exports it as the default handler.
- * All HTTP requests are routed here via vercel.json rewrites.
+ * Vercel serverless function entry point — minimal test version.
  */
-const app = require('../src/server');
-
-module.exports = app;
+module.exports = (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify({ status: 'ok', url: req.url, ts: Date.now() }));
+};
