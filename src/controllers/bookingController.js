@@ -149,7 +149,7 @@ exports.createGuestBooking = async (req, res, next) => {
           name: guestName,
           email: guestEmail,
           phone: cleanPhone,
-          password_hash: uuidv4(), // random unusable password
+          password: uuidv4(), // random unusable password
           role: 'customer',
           is_active: true,
         })
